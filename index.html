@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <link rel="icon" href="/favicon.ico">
+  <link rel="apple-touch-icon" href="/icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>ToDoリスト</title>
+
+  <style>
+body{
+  background: linear-gradient(#fff0f5,#ffe4ec);
+  font-size: 18px;
+  font-family: sans-serif;
+}
+
+h1 {
+  text-align: center;
+  color: #ff4d6d;
+}
+
+#today {
+  font-size: 20px;
+  font-weight: bold;
+  text-align: center;
+}
+
+.done {
+  color: gray;
+  text-decoration: line-through;
+  background-color: #ffe5ec;
+  transition: 0.3s;
+}
+
+#barContainer {
+  width: 100%;
+  height: 20px;
+  background-color: lightgray;
+}
+
+#bar {
+  height: 100%;
+  width: 0%;
+  background-color: green;
+  transition: 0.3s;
+}
+
+input {
+  padding 6px;
+  border-radius 6px;
+  border: 1px solid #ccc;
+}
+
+input[type="checkbox"] {
+  transform: scale(2);
+  margin-right: 10px;
+}
+
+li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: white;
+  padding: 10px;
+  margin-bottom: 5px;
+  border-radius: 10px;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+li:hover {
+  transform: translateY(-2px);
+}
+
+button{
+  border: none;
+  border-redius: 8px;
+  padding: 6px 10px;
+  background-color: #ffb3c6;
+}
+
+li button {
+  margin-left: 6px
+}
+
+button:hover {
+  background-color: #d0d0d0;
+}
+
+  </style>
+</head>
+
+<body>
+
+<h1>ToDoリスト</h1>
+
+<h2 id="today"></h2>
+
+<input type="text" id="taskInput" placeholder="タスクを入力">
+<input type="time" id="timeInput">
+<select id="weekdayInput">
+  <option value="">毎日</option>
+  <option value="1">日曜</option>
+  <option value="2">月曜</option>
+  <option value="3">火曜</option>
+  <option value="4">水曜</option>
+  <option value="5">木曜</option>
+  <option value="6">金曜</option>
+  <option value="7">土曜</option>
+</select>
+<button onclick="addTask()">追加</button>
+
+<p id="progress"></p>
+
+<div id="barContainer">
+  <div id="bar"></div>
+</div>
+
+
+<ul id="habitList"></ul>
+
+<script>
+// 日付を取得
+const today = new Date();
+
+const days = ["日","月","火","水","木","金","土"];
+
+const year = today.getFullYear();
+const month = today.getMonth() + 1;
+const date = today.getDate();
+const day = days[today.getDay()];
+
+const text = `${year}年${month}月${date}日 (${day})`;
+
+document.getElementById("today").textContent = text;
+
+// 読み込みメッセージを表示
+document.getElementById("progress").textContent = "よみこみちゅう…🍀";
+const start = Date.now();
+
+fetch("/habits")
+  .then(res => {
+    if (!res.ok) {
+      throw new Error("サーバーエラー");
+    }
+    return res.json();
+  })
+  .then(data => {
+    const elapsed = Date.now() - start;
+    const delay = Math.max(0,500 - elapsed);
+
+    setTimeout(() => {
+
+      const ul = document.getElementById("habitList");
+      ul.innerHTML = "";
+
+      let total = 0;
+      let done = 0;
+
+      data.forEach((habit) => {
+        total++;
+
+        if (habit.completed == 1) {
+          done++;
+        }
+
+      const li = document.createElement("li");
+
+      const left = document.createElement("span");
+      const right = document.createElement("span");
+
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+
+      if (habit.completed == 1) {
+        checkbox.checked = true;
+        li.classList.add("done");
+      }
+
+      checkbox.onchange = function() {
+        fetch("/toggle", {
+          method:"POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            habit_id: habit.id
+          })
+        })
+        .then(() => {
+          if (this.checked) {
+            li.classList.add("done");
+            done++;
+          } else {
+            li.classList.remove("done");
+            done--;
+          }
+
+          updateProgress(total,done);
+        });
+      };
+
+      left.appendChild(checkbox);
+
+      const time = habit.habit_time.slice(0,5);
+
+      left.appendChild(
+        document.createTextNode(" " + time + "　" + habit.habit_name)
+      );
+
+      ul.appendChild(li);
+
+      const deleteBtn = document.createElement("button");
+      deleteBtn.textContent = "削除";
+
+      deleteBtn.onclick = function(event) {
+        event.stopPropagation();
+
+        if (!confirm("このタスクを削除する？")) return;
+
+        fetch("/deleteHabit", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            habit_id: habit.id
+          })
+        })
+        .then(() => {
+          location.reload();
+        });
+      };
+
+      right.appendChild(deleteBtn);
+
+      const editBtn =
+      document.createElement("button");
+      editBtn.textContent = "編集";
+
+      editBtn.onclick = function() {
+        const newName = prompt("新しい名前を入力",habit.habit_name);
+        const newTime = prompt("新しい時間を入力(HH:MM)",habit.habit_time.slice(0,5));
+
+        if (!newName || !newTime) return;
+        fetch("/updateHabit",{
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            habit_id: habit.id,
+            name: newName,
+            time: newTime + ":00"
+          })
+        })
+        .then(() => {
+          location.reload();
+        });
+      };
+
+      right.appendChild(editBtn)
+
+      li.appendChild(left);
+      li.appendChild(right);
+    });
+    updateProgress(total,done);
+    }, delay);
+  })
+  .catch(() => {
+    document.getElementById("progress").textContent = "通信失敗…💦";
+  });
+
+
+// 達成率計算用関数セット
+function updateProgress(total,done) {
+  const percent = total === 0 ? 0:
+  Math.round((done/total) * 100);
+
+  let message = `達成率: ${done}/${total} (${percent}%)`;
+
+  if (percent === 100) {
+    message += "🎊完全達成🎊";
+  }
+
+  const bar = document.getElementById("bar");
+  bar.style.width = percent + "%";
+
+  if (percent === 100) {
+    bar.style.backgroundColor = "gold";
+  } else if (percent < 30) {
+    bar.style.backgroundColor = "red";
+  } else if (percent < 50) {
+    bar.style.backgroundColor = "orange";
+  } else if (percent < 80) {
+    bar.style.backgroundColor = "green";
+  }
+
+  document.getElementById("progress").textContent = message;
+}
+
+// タスク追加用関数セット
+function addTask() {
+  const input = document.getElementById("taskInput");
+  const timeInput = document.getElementById("timeInput");
+  const weekdayInput = document.getElementById("weekdayInput");
+
+  const text = input.value;
+  const time = timeInput.value;
+  const weekday = weekdayInput.value || null;
+
+  if (text === "" || time === "" || weekday === "") return;
+
+  fetch("/addHabit", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      name: text,
+      time: time + ":00",
+      weekday: weekday
+    })
+  })
+  .then((res) => {
+    location.reload();
+  });
+
+  input.value = "";
+  timeInput.value = "";
+  weekdayInput.value = "";
+}
+</script>
+
+</body>
+</html>
