@@ -22,9 +22,9 @@ const db = mysql.createConnection({
 db.connect((err) => {
   if (err) {
     console.error("DB接続失敗:", err);
-    return;
+  } else {
+    console.log("DB接続成功！");
   }
-  console.log("DB接続成功！");
 });
 
 app.get("/habits", (req, res) => {
