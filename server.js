@@ -30,8 +30,8 @@ db.connect((err) => {
 app.get("/habits", (req, res) => {
   db.query("select h.id,h.habit_name,h.habit_time,l.completed from habits h left join habit_logs l on h.id=l.habbit_id and l.log_date=curdate() where h.weekday is null or h.weekday=dayofweek(curdate()) order by h.habit_time;", (err, results) => {
     if (err) {
-      res.status(500).send(err);
-      return;
+      console.error("SQLエラー:",err);
+      return res.status(500).json({ error: err.message});
     }
     res.json(results);
   });
